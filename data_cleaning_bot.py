@@ -45,7 +45,7 @@ st.sidebar.header("About")
 st.sidebar.info("""
 This bot helps automate basic data cleaning tasks using **Python & Streamlit**.
 
-Author: Your Name
+Author: Jalen Claytor
 """)
 
 # ---- File Uploader ----
