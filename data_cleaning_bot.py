@@ -1,12 +1,4 @@
-import os
-import zipfile
-
-# Create folder structure
-project_folder = "data_cleaning_bot_project"
-os.makedirs(project_folder, exist_ok=True)
-
-# Python script content (from updated version)
-python_code = '''import streamlit as st
+import streamlit as st
 import pandas as pd
 import os
 
@@ -97,30 +89,3 @@ if uploaded_file is not None:
         st.error(f"❌ Error processing file: {e}")
 else:
     st.info("⬆️ Please upload a CSV or Excel file to get started.")
-'''
-
-# Write Python script
-with open(os.path.join(project_folder, "data_cleaning_bot.py"), "w") as f:
-    f.write(python_code)
-
-# Create requirements.txt
-requirements = "streamlit\npandas\nopenpyxl\n"
-with open(os.path.join(project_folder, "requirements.txt"), "w") as f:
-    f.write(requirements)
-
-# Create README.md
-readme = "# Data Cleaning Bot\n\nA simple Streamlit app to clean CSV and Excel files by removing duplicates and filling missing values.\n\n**Features:**\n- File upload (CSV/Excel)\n- Data cleaning\n- Cleaned file download\n\nDeployed easily with Streamlit Cloud!"
-with open(os.path.join(project_folder, "README.md"), "w") as f:
-    f.write(readme)
-
-# Zip the folder
-zip_filename = "data_cleaning_bot_project.zip"
-with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
-    for root, dirs, files in os.walk(project_folder):
-        for file in files:
-            filepath = os.path.join(root, file)
-            zipf.write(filepath, os.path.relpath(filepath, project_folder))
-
-# Output the path to ZIP
-zip_filename
-
