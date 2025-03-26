@@ -15,9 +15,10 @@ if theme == "Dark":
     text_color = "#ffffff"
     container_bg = "rgba(255, 255, 255, 0.1)"
 else:
-    bg_color = "#f5f5f5"
+    bg_color = "#F0FFFF"  # Aqua white
     text_color = "#000000"
-    container_bg = "rgba(255, 255, 255, 0.8)"
+    container_bg = "rgba(255, 255, 255, 0.85)"
+
 
 # -----------------------------
 # 🎨 Custom Styling & Fonts
