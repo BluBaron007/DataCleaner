@@ -1,233 +1,198 @@
-import streamlit as st
-import yfinance as yf
-import numpy as np
+""import streamlit as st
 import pandas as pd
-from scipy.stats import norm
-import datetime
+import numpy as np
+import os
+from scipy import stats
 
-# ---- Custom CSS Styling ----
-import streamlit as st
-
-# ---- Custom Background Color ----
+# ---- Custom CSS Styling (Olive Theme) ----
+st.set_page_config(page_title="Data Cleaning Bot", page_icon="🧹", layout="centered")
 st.markdown(
     """
     <style>
-    .stApp {
-        background-color: #deb887;
+    html, body, [class*="css"] {
+        font-family: 'Segoe UI', sans-serif;
+        background-color: #f6f9f6;
+    }
+
+    .main {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 2rem;
+    }
+
+    .stButton > button {
+        background-color: #556B2F;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        transition: background-color 0.3s ease;
+    }
+
+    .stButton > button:hover {
+        background-color: #3e4e20;
+        color: white;
+    }
+
+    .stFileUploader {
+        border: 2px dashed #556B2F;
+        background-color: #eef2e6;
+        padding: 1rem;
+        border-radius: 10px;
+    }
+
+    .stTextInput > div > input,
+    .stNumberInput > div > input,
+    .stSelectbox > div {
+        background-color: #f9fcf6;
+        border: 1px solid #556B2F;
+        border-radius: 6px;
+        padding: 0.4rem;
+    }
+
+    .stDataFrame {
+        border: 1px solid #cdd8c3;
+    }
+
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        color: #556B2F;
+    }
+
+    .stAlert {
+        border-left: 5px solid #556B2F !important;
+        background-color: #f6fbf3 !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-}
-/* Keep the rest of your styles unchanged */
-</style>
-""", unsafe_allow_html=True)
+# ---- App Title & Description ----
+st.title("🧹 Clean & Process Your Data Easily")
+st.write("""
+Welcome to the **Data Cleaning Bot!**
 
-}
-.stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stButton>button {
-    border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.9);
-    color: black;
-    border: 1px solid #555555;
-    padding: 8px;
-    font-size: 14px;
-    animation: fadeInBox 1s ease-in;
-}
-@keyframes fadeInBox {
-    from {opacity: 0; transform: translateY(10px);}
-    to {opacity: 1; transform: translateY(0);}
-}
-h1, h3, p {
-    animation: fadeInHeader 1s ease-in;
-}
-@keyframes fadeInHeader {
-    from {opacity: 0; transform: translateY(-10px);}
-    to {opacity: 1; transform: translateY(0);}
-}
-label {
-    color: black !important;
-    font-weight: bold;
-}
-.block-container {
-    max-width: 100%;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-}
-hr {
-    border: 1px solid #444444;
-    margin: 20px 0;
-}
-.css-1d391kg {
-    background-color: #2c2c2e;
-    color: white;
-}
-@media screen and (max-width: 600px) {
-    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"], .stButton>button {
-        padding: 6px;
-        font-size: 12px;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
+- Upload your CSV or Excel files 📄
+- Remove duplicates, optionally fill missing values, fix data types
+- Remove numeric outliers and view a detailed cleaning summary 🚀
+""")
 
-# ---- Title ----
-st.markdown("<h1 style='text-align: center;'>Options Strategy Predictor</h1>", unsafe_allow_html=True)
-st.markdown("<hr>", unsafe_allow_html=True)
+# ---- Sidebar Info ----
+st.sidebar.header("About")
+st.sidebar.info("""
+This bot helps automate advanced data cleaning tasks using **Python & Streamlit**.
 
-# ---- Input Form ----
-with st.form("input_form"):
-    st.markdown("<h3 style='text-align: center;'>Input Parameters</h3>", unsafe_allow_html=True)
+Author: Jalen Claytor
+""")
 
-    ticker = st.text_input("Stock Ticker", "AAPL").upper()
-    num_contracts = st.number_input("Number of Contracts", min_value=1, value=1, step=1)
-    percent_up = st.number_input("Stock Move Up (%)", min_value=1, max_value=500, value=10, step=1)
-    percent_down = st.number_input("Stock Move Down (%)", min_value=1, max_value=500, value=10, step=1)
+# ---- File Uploader ----
+uploaded_file = st.file_uploader("📂 Upload your file", type=["csv", "xlsx"])
 
-    exp_date = None
-    chosen_strike = None
+if uploaded_file is not None:
+    st.success(f"✅ Uploaded file: {uploaded_file.name}")
 
-    if ticker:
-        stock = yf.Ticker(ticker)
-        expirations = stock.options
-        exp_date = st.selectbox("Select Expiration Date", expirations)
-
-        options_chain = stock.option_chain(exp_date)
-        calls = options_chain.calls[['strike', 'lastPrice']]
-        puts = options_chain.puts[['strike', 'lastPrice']]
-        available_strikes = sorted(list(set(calls['strike']).intersection(set(puts['strike']))))
-        chosen_strike = st.selectbox("Select Strike Price", available_strikes)
-
-    submit_button = st.form_submit_button(label='Run Strategy Analysis')
-
-# ---- After Submit ----
-if submit_button and ticker and exp_date and chosen_strike:
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>Market Data & Option Chain</h3>", unsafe_allow_html=True)
-
-    history = stock.history(period="250d")
-    current_price = history['Close'].iloc[-1]
-    st.markdown(f"<p style='text-align: center;'>Current Stock Price: <strong>${current_price:.2f}</strong></p>", unsafe_allow_html=True)
-
-    # ---- Moving Averages ----
-    ma_5 = history['Close'].rolling(window=5).mean().iloc[-1]
-    ma_10 = history['Close'].rolling(window=10).mean().iloc[-1]
-    ma_50 = history['Close'].rolling(window=50).mean().iloc[-1]
-    ma_200 = history['Close'].rolling(window=200).mean().iloc[-1]
-
-    st.markdown("<h3 style='text-align: center;'>Trend Analysis (MA)</h3>", unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align: center;'>5D MA: <strong>${ma_5:.2f}</strong> | 10D MA: <strong>${ma_10:.2f}</strong><br>50D MA: <strong>${ma_50:.2f}</strong> | 200D MA: <strong>${ma_200:.2f}</strong></p>", unsafe_allow_html=True)
-
-    if current_price > ma_5 and current_price > ma_10 and current_price > ma_50 and current_price > ma_200:
-        trend = "Uptrend"
-    elif current_price < ma_5 and current_price < ma_10 and current_price < ma_50 and current_price < ma_200:
-        trend = "Downtrend"
-    else:
-        trend = "Sideways"
-
-    st.markdown(f"<p style='text-align: center;'><strong>Detected Trend:</strong> {trend}</p>", unsafe_allow_html=True)
-
-    # ---- Volatility & Probabilities ----
-    history['Return'] = history['Close'].pct_change()
-    volatility = history['Return'].std()
-
-    expiry_date = datetime.datetime.strptime(exp_date, "%Y-%m-%d")
-    today = datetime.datetime.today()
-    days_to_expiry = (expiry_date - today).days
-
-    if volatility == 0 or days_to_expiry <= 0:
-        st.error("Volatility data unavailable or expiration date is invalid.")
-    else:
-        annual_vol = volatility * np.sqrt(252)
-        daily_vol = annual_vol / np.sqrt(252)
-
-        threshold_up = percent_up / 100
-        threshold_down = -percent_down / 100
-
-        z_up = (threshold_up) / (daily_vol * np.sqrt(days_to_expiry))
-        z_down = (threshold_down) / (daily_vol * np.sqrt(days_to_expiry))
-
-        prob_up = 1 - norm.cdf(z_up)
-        prob_down = norm.cdf(z_down)
-        prob_flat = 1 - (prob_up + prob_down)
-
-        # ---- Adjust for Trend ----
-        if trend == "Uptrend":
-            prob_up *= 1.10
-            prob_down *= 0.90
-        elif trend == "Downtrend":
-            prob_down *= 1.10
-            prob_up *= 0.90
+    try:
+        # Read file
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
         else:
-            prob_flat *= 1.10
+            df = pd.read_excel(uploaded_file)
 
-        total = prob_up + prob_down + prob_flat
-        prob_up /= total
-        prob_down /= total
-        prob_flat /= total
+        st.subheader("🔍 Raw Data Preview")
+        st.dataframe(df.head(), use_container_width=True)
 
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center;'>Scenario Probabilities</h3>", unsafe_allow_html=True)
+        # ---- Cleaning Steps ----
+        summary_log = []
 
-        up_color = "green" if prob_up > 0.5 else "red"
-        down_color = "green" if prob_down > 0.5 else "red"
-        flat_color = "green" if prob_flat > 0.5 else "red"
+        # 1. Remove duplicates
+        dup_count = df.duplicated().sum()
+        df_cleaned = df.drop_duplicates()
+        summary_log.append(f"✔ {dup_count} duplicate rows removed.")
 
-        st.markdown(f"<p style='text-align: center; color:{up_color};'>Probability Stock Up > +{percent_up}%: <strong>{prob_up:.2f}</strong></p>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center; color:{down_color};'>Probability Stock Down > -{percent_down}%: <strong>{prob_down:.2f}</strong></p>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center; color:{flat_color};'>Probability Flat: <strong>{prob_flat:.2f}</strong></p>", unsafe_allow_html=True)
+        # 2. Prompt user for how to handle missing values
+        st.subheader("🧩 Handle Missing Values")
+        fill_strategies = {}
+        for col in df_cleaned.columns:
+            if df_cleaned[col].isna().sum() > 0:
+                strategy = st.selectbox(
+                    f"Column '{col}' has {df_cleaned[col].isna().sum()} missing values. Choose a fill method:",
+                    ["Leave as is", "Median", "Mean", "Mode"],
+                    key=col
+                )
+                fill_strategies[col] = strategy
 
-        # ---- Payoff Matrix ----
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center;'>Payoff Matrix</h3>", unsafe_allow_html=True)
+        # Apply selected fill strategies
+        missing_filled = {}
+        for col, strategy in fill_strategies.items():
+            missing_before = df_cleaned[col].isna().sum()
+            if strategy == "Median":
+                df_cleaned[col].fillna(df_cleaned[col].median(), inplace=True)
+                missing_filled[col] = f"filled {missing_before} NaNs with median ({df_cleaned[col].median()})"
+            elif strategy == "Mean":
+                df_cleaned[col].fillna(df_cleaned[col].mean(), inplace=True)
+                missing_filled[col] = f"filled {missing_before} NaNs with mean ({df_cleaned[col].mean()})"
+            elif strategy == "Mode":
+                mode_val = df_cleaned[col].mode()[0] if not df_cleaned[col].mode().empty else "N/A"
+                df_cleaned[col].fillna(mode_val, inplace=True)
+                missing_filled[col] = f"filled {missing_before} NaNs with mode ('{mode_val}')"
+            else:
+                missing_filled[col] = "left unchanged"
 
-        shares_per_contract = 100
-        strategies = ['Buy Call', 'Buy Put', 'Write Call', 'Write Put']
-        scenarios = [f'Stock Up {percent_up}%', f'Stock Down {percent_down}%', 'Stock Flat']
-        payoff_matrix = []
+        if missing_filled:
+            summary_log.append("✔ Missing values handled:")
+            for col, msg in missing_filled.items():
+                summary_log.append(f"    - '{col}': {msg}")
 
-        for strategy in strategies:
-            row = []
-            for scenario in scenarios:
-                if scenario.startswith('Stock Up'):
-                    new_price = chosen_strike * (1 + percent_up / 100)
-                elif scenario.startswith('Stock Down'):
-                    new_price = chosen_strike * (1 - percent_down / 100)
-                else:
-                    new_price = chosen_strike
+        # 3. Standardize column names
+        df_cleaned.columns = [col.strip().lower().replace(' ', '_') for col in df_cleaned.columns]
 
-                call_price = calls.loc[calls['strike'] == chosen_strike, 'lastPrice'].values[0]
-                put_price = puts.loc[puts['strike'] == chosen_strike, 'lastPrice'].values[0]
+        # 4. Enforce data types
+        conversions = []
+        for col in df_cleaned.columns:
+            original_dtype = df_cleaned[col].dtype
+            try:
+                df_cleaned[col] = pd.to_numeric(df_cleaned[col])
+                conversions.append(f"'{col}': converted to numeric")
+            except:
+                try:
+                    df_cleaned[col] = pd.to_datetime(df_cleaned[col])
+                    conversions.append(f"'{col}': converted to datetime")
+                except:
+                    conversions.append(f"'{col}': kept as {original_dtype}")
+        summary_log.append("✔ Data type conversions:")
+        summary_log.extend([f"    - {c}" for c in conversions])
 
-                if strategy == 'Buy Call':
-                    payoff = (max(0, new_price - chosen_strike) - call_price) * shares_per_contract * num_contracts
-                elif strategy == 'Buy Put':
-                    payoff = (max(0, chosen_strike - new_price) - put_price) * shares_per_contract * num_contracts
-                elif strategy == 'Write Call':
-                    payoff = (call_price - max(0, new_price - chosen_strike)) * shares_per_contract * num_contracts
-                elif strategy == 'Write Put':
-                    payoff = (put_price - max(0, chosen_strike - new_price)) * shares_per_contract * num_contracts
+        # 5. Remove numeric outliers (Z-score method)
+        numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
+        before_rows = df_cleaned.shape[0]
+        df_cleaned = df_cleaned[(np.abs(stats.zscore(df_cleaned[numeric_cols], nan_policy='omit')) < 3).all(axis=1)]
+        after_rows = df_cleaned.shape[0]
+        outliers_removed = before_rows - after_rows
+        summary_log.append(f"✔ {outliers_removed} outlier rows removed from numeric columns.")
 
-                row.append(round(payoff, 2))
-            payoff_matrix.append(row)
+        st.subheader("✨ Cleaned Data Preview")
+        st.dataframe(df_cleaned.head(), use_container_width=True)
 
-        df = pd.DataFrame(payoff_matrix, index=strategies, columns=scenarios)
-        st.dataframe(df.style.set_table_attributes("style='margin-left: auto; margin-right: auto;'"))
+        # Save cleaned file
+        cleaned_filename = f"cleaned_{uploaded_file.name.replace(' ', '_')}"
+        df_cleaned.to_csv(cleaned_filename, index=False)
 
-        # ---- Strategy Recommendation ----
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center;'>Strategy Recommendations</h3>", unsafe_allow_html=True)
+        # Download button
+        with open(cleaned_filename, "rb") as file:
+            st.download_button(label="📥 Download Cleaned File", data=file, file_name=cleaned_filename, mime='text/csv')
 
-        probabilities = [prob_up, prob_down, prob_flat]
-        row_mins = np.min(payoff_matrix, axis=1)
-        minimax_value = np.max(row_mins)
-        optimal_minimax_index = np.argmax(row_mins)
-        optimal_minimax_strategy = strategies[optimal_minimax_index]
+        st.success("🎉 Cleaning complete! Download your file above.")
 
-        expected_values = np.dot(payoff_matrix, probabilities)
-        optimal_expected_index = np.argmax(expected_values)
-        optimal_expected_strategy = strategies[optimal_expected_index]
+        # Show summary
+        st.subheader("🧾 Cleaning Summary")
+        for line in summary_log:
+            st.write(line)
 
-        st.markdown(f"<p style='text-align: center;'><strong>Minimax Strategy:</strong> {optimal_minimax_strategy} (Worst-case payoff = ${minimax_value:.2f})</p>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align: center;'><strong>Expected Value Strategy:</strong> {optimal_expected_strategy} (Expected payoff = ${expected_values[optimal_expected_index]:.2f})</p>", unsafe_allow_html=True)
+        # Cleanup temp file
+        os.remove(cleaned_filename)
+
+    except Exception as e:
+        st.error(f"❌ Error processing file: {e}")
+else:
+    st.info("⬆️ Please upload a CSV or Excel file to get started.")
