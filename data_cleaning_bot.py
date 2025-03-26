@@ -4,58 +4,19 @@ import numpy as np
 import os
 from scipy import stats
 
-# ---- Custom CSS Styling ----
-st.set_page_config(page_title="Data Cleaning Bot", page_icon="🧹", layout="centered")
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #f0f2f6;
-        padding: 2rem;
-        border-radius: 10px;
-    }
-    .stButton > button {
-        color: white;
-        background-color: #4CAF50;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        border: none;
-    }
-    .stFileUploader {
-        background-color: white;
-        padding: 1rem;
-        border: 2px dashed #4CAF50;
-        border-radius: 10px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# Streamlit UI Setup
+st.set_page_config(page_title="Advanced Data Cleaning Bot", page_icon="🧹", layout="centered")
+st.title("🧹 Data Cleaning Bot with Custom Fill Options")
 
-# ---- App Title & Description ----
-st.title("🧹 Clean & Process Your Data Easily")
-st.write("""
-Welcome to the **Data Cleaning Bot!**
-
-- Upload your CSV or Excel files 📄
-- Remove duplicates, fill missing values, fix data types
-- Remove numeric outliers and view a detailed cleaning summary 🚀
-""")
-
-# ---- Sidebar Info ----
+# Sidebar Info
 st.sidebar.header("About")
-st.sidebar.info("""
-This bot helps automate advanced data cleaning tasks using **Python & Streamlit**.
+st.sidebar.info("Clean your data interactively. Choose how to fill missing values for each column.")
 
-Author: Jalen Claytor
-""")
-
-# ---- File Uploader ----
-uploaded_file = st.file_uploader("📂 Upload your file", type=["csv", "xlsx"])
+uploaded_file = st.file_uploader("📂 Upload a CSV or Excel file", type=["csv", "xlsx"])
 
 if uploaded_file is not None:
     st.success(f"✅ Uploaded file: {uploaded_file.name}")
-
+    
     try:
         # Read file
         if uploaded_file.name.endswith('.csv'):
@@ -66,83 +27,98 @@ if uploaded_file is not None:
         st.subheader("🔍 Raw Data Preview")
         st.dataframe(df.head(), use_container_width=True)
 
-        # ---- Cleaning Steps ----
-        summary_log = []
+        cleaning_log = []
 
-        # 1. Remove duplicates
-        dup_count = df.duplicated().sum()
-        df_cleaned = df.drop_duplicates()
-        summary_log.append(f"✔ {dup_count} duplicate rows removed.")
+        # Remove duplicates
+        num_duplicates = df.duplicated().sum()
+        df = df.drop_duplicates()
+        cleaning_log.append(f"✔ Removed {num_duplicates} duplicate rows.")
 
-        # 2. Fill missing values
-        missing_filled = {}
-        for col in df_cleaned.columns:
-            missing_before = df_cleaned[col].isna().sum()
-            if missing_before > 0:
-                if df_cleaned[col].dtype in [np.float64, np.int64]:
-                    df_cleaned[col].fillna(df_cleaned[col].median(), inplace=True)
-                    missing_filled[col] = f"filled {missing_before} NaNs with median ({df_cleaned[col].median()})"
-                elif df_cleaned[col].dtype == object:
-                    mode_val = df_cleaned[col].mode()[0] if not df_cleaned[col].mode().empty else "N/A"
-                    df_cleaned[col].fillna(mode_val, inplace=True)
-                    missing_filled[col] = f"filled {missing_before} NaNs with mode ('{mode_val}')"
+        # Handle missing values with user input
+        st.subheader("🧩 Handle Missing Values")
+        fill_choices = {}
+        for col in df.columns[df.isnull().any()]:
+            dtype = df[col].dtype
+            st.markdown(f"**Column:** `{col}` — Missing: {df[col].isnull().sum()}")
+
+            options = ["Median", "Mean", "Mode", "Custom Value", "Leave as N/A"]
+            choice = st.selectbox(f"Fill strategy for `{col}`", options, key=col)
+
+            custom_value = None
+            if choice == "Custom Value":
+                if np.issubdtype(dtype, np.number):
+                    custom_value = st.number_input(f"Enter custom numeric value for `{col}`", key=col + "_custom")
                 else:
-                    df_cleaned[col].fillna("N/A", inplace=True)
-                    missing_filled[col] = f"filled {missing_before} NaNs with 'N/A'"
-        if missing_filled:
-            summary_log.append("✔ Missing values filled:")
-            for col, msg in missing_filled.items():
-                summary_log.append(f"    - '{col}': {msg}")
+                    custom_value = st.text_input(f"Enter custom value for `{col}`", key=col + "_custom")
 
-        # 3. Standardize column names
-        df_cleaned.columns = [col.strip().lower().replace(' ', '_') for col in df_cleaned.columns]
+            fill_choices[col] = (choice, custom_value)
 
-        # 4. Enforce data types
-        conversions = []
-        for col in df_cleaned.columns:
-            original_dtype = df_cleaned[col].dtype
-            try:
-                df_cleaned[col] = pd.to_numeric(df_cleaned[col])
-                conversions.append(f"'{col}': converted to numeric")
-            except:
-                try:
-                    df_cleaned[col] = pd.to_datetime(df_cleaned[col])
-                    conversions.append(f"'{col}': converted to datetime")
-                except:
-                    conversions.append(f"'{col}': kept as {original_dtype}")
-        summary_log.append("✔ Data type conversions:")
-        summary_log.extend([f"    - {c}" for c in conversions])
+        if st.button("🧼 Clean Data"):
+            for col, (choice, custom_value) in fill_choices.items():
+                if choice == "Median":
+                    val = df[col].median()
+                elif choice == "Mean":
+                    val = df[col].mean()
+                elif choice == "Mode":
+                    val = df[col].mode().iloc[0] if not df[col].mode().empty else "N/A"
+                elif choice == "Custom Value":
+                    val = custom_value
+                elif choice == "Leave as N/A":
+                    val = None
 
-        # 5. Remove numeric outliers (Z-score method)
-        numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
-        before_rows = df_cleaned.shape[0]
-        df_cleaned = df_cleaned[(np.abs(stats.zscore(df_cleaned[numeric_cols], nan_policy='omit')) < 3).all(axis=1)]
-        after_rows = df_cleaned.shape[0]
-        outliers_removed = before_rows - after_rows
-        summary_log.append(f"✔ {outliers_removed} outlier rows removed from numeric columns.")
+                if val is not None:
+                    df[col].fillna(val, inplace=True)
+                    cleaning_log.append(f"✔ Filled missing values in `{col}` with {choice} ({val})")
+                else:
+                    cleaning_log.append(f"✔ Left missing values in `{col}` as N/A")
 
-        st.subheader("✨ Cleaned Data Preview")
-        st.dataframe(df_cleaned.head(), use_container_width=True)
+            # Data type conversions
+            conversions = []
+            for col in df.columns:
+                if df[col].dtype == object:
+                    try:
+                        df[col] = pd.to_datetime(df[col])
+                        conversions.append(f"`{col}` → datetime")
+                    except:
+                        try:
+                            df[col] = pd.to_numeric(df[col])
+                            conversions.append(f"`{col}` → numeric")
+                        except:
+                            continue
+            cleaning_log.append("✔ Data type conversions: " + ", ".join(conversions) if conversions else "✔ No data type conversions applied.")
 
-        # Save cleaned file
-        cleaned_filename = f"cleaned_{uploaded_file.name.replace(' ', '_')}"
-        df_cleaned.to_csv(cleaned_filename, index=False)
+            # Outlier removal using Z-score
+            numeric_df = df.select_dtypes(include=[np.number])
+            z_scores = np.abs(stats.zscore(numeric_df, nan_policy='omit'))
+            outliers = (z_scores > 3).any(axis=1)
+            num_outliers = outliers.sum()
+            df = df[~outliers]
+            cleaning_log.append(f"✔ Removed {num_outliers} outlier rows using Z-score.")
 
-        # Download button
-        with open(cleaned_filename, "rb") as file:
-            st.download_button(label="📥 Download Cleaned File", data=file, file_name=cleaned_filename, mime='text/csv')
+            # Clean column names
+            df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
 
-        st.success("🎉 Cleaning complete! Download your file above.")
+            st.subheader("✨ Cleaned Data Preview")
+            st.dataframe(df.head(), use_container_width=True)
 
-        # Show summary
-        st.subheader("🧾 Cleaning Summary")
-        for line in summary_log:
-            st.write(line)
+            # Save cleaned file
+            cleaned_filename = f"cleaned_{uploaded_file.name.replace(' ', '_')}"
+            df.to_csv(cleaned_filename, index=False)
 
-        # Cleanup temp file
-        os.remove(cleaned_filename)
+            with open(cleaned_filename, "rb") as file:
+                st.download_button(label="📥 Download Cleaned File", data=file, file_name=cleaned_filename, mime='text/csv')
+
+            st.success("🎉 Cleaning complete!")
+
+            # Display cleaning summary
+            st.subheader("📋 Cleaning Summary")
+            for log in cleaning_log:
+                st.write(log)
+
+            # Cleanup
+            os.remove(cleaned_filename)
 
     except Exception as e:
         st.error(f"❌ Error processing file: {e}")
 else:
-    st.info("⬆️ Please upload a CSV or Excel file to get started.")
+    st.info("⬆️ Upload a file to begin.")
