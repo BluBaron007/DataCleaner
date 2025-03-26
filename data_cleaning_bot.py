@@ -1,8 +1,14 @@
-import streamlit as st
+""import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import string
+from datetime import datetime
 from scipy import stats
+
+# ---- Session State Initialization ----
+if "file_history" not in st.session_state:
+    st.session_state.file_history = []
 
 # ---- Custom CSS Styling (Olive Theme) ----
 st.set_page_config(page_title="Data Cleaning Bot", page_icon="🧹", layout="centered")
@@ -13,13 +19,11 @@ st.markdown(
         font-family: 'Segoe UI', sans-serif;
         background-color: #f6f9f6;
     }
-
     .main {
         background-color: #ffffff;
         border-radius: 10px;
         padding: 2rem;
     }
-
     .stButton > button {
         background-color: #556B2F;
         color: white;
@@ -29,19 +33,16 @@ st.markdown(
         font-weight: 600;
         transition: background-color 0.3s ease;
     }
-
     .stButton > button:hover {
         background-color: #3e4e20;
         color: white;
     }
-
     .stFileUploader {
         border: 2px dashed #556B2F;
         background-color: #eef2e6;
         padding: 1rem;
         border-radius: 10px;
     }
-
     .stTextInput > div > input,
     .stNumberInput > div > input,
     .stSelectbox > div {
@@ -50,15 +51,12 @@ st.markdown(
         border-radius: 6px;
         padding: 0.4rem;
     }
-
     .stDataFrame {
         border: 1px solid #cdd8c3;
     }
-
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         color: #556B2F;
     }
-
     .stAlert {
         border-left: 5px solid #556B2F !important;
         background-color: #f6fbf3 !important;
@@ -74,17 +72,25 @@ st.write("""
 Welcome to the **Data Cleaning Bot!**
 
 - Upload your CSV or Excel files 📄
-- Remove duplicates, optionally fill missing values, fix data types
+- Remove duplicates, optionally fill missing values, normalize text, fix data types
 - Remove numeric outliers and view a detailed cleaning summary 🚀
 """)
 
-# ---- Sidebar Info ----
-st.sidebar.header("About")
-st.sidebar.info("""
-This bot helps automate advanced data cleaning tasks using **Python**.
-
-Author: Jalen Claytor
-""")
+# ---- Sidebar History ----
+st.sidebar.header("📁 Session File History")
+if st.session_state.file_history:
+    for item in st.session_state.file_history:
+        with st.sidebar.expander(item['name']):
+            st.write(f"🕒 Cleaned at: {item['timestamp']}")
+            st.download_button(
+                label="Download",
+                data=item['data'],
+                file_name=item['name'],
+                mime="text/csv",
+                key=f"history_{item['name']}"
+            )
+else:
+    st.sidebar.info("No cleaned files this session.")
 
 # ---- File Uploader ----
 uploaded_file = st.file_uploader("📂 Upload your file", type=["csv", "xlsx"])
@@ -147,7 +153,14 @@ if uploaded_file is not None:
         # 3. Standardize column names
         df_cleaned.columns = [col.strip().lower().replace(' ', '_') for col in df_cleaned.columns]
 
-        # 4. Enforce data types
+        # 4. Text normalization for object columns
+        text_norm = st.checkbox("🧹 Normalize text columns (lowercase, remove punctuation)", value=True)
+        if text_norm:
+            for col in df_cleaned.select_dtypes(include=['object']).columns:
+                df_cleaned[col] = df_cleaned[col].astype(str).str.lower().str.translate(str.maketrans('', '', string.punctuation))
+            summary_log.append("✔ Text columns normalized (lowercase + punctuation removed).")
+
+        # 5. Enforce data types
         conversions = []
         for col in df_cleaned.columns:
             original_dtype = df_cleaned[col].dtype
@@ -163,7 +176,7 @@ if uploaded_file is not None:
         summary_log.append("✔ Data type conversions:")
         summary_log.extend([f"    - {c}" for c in conversions])
 
-        # 5. Remove numeric outliers (Z-score method)
+        # 6. Remove numeric outliers (Z-score method)
         numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
         before_rows = df_cleaned.shape[0]
         df_cleaned = df_cleaned[(np.abs(stats.zscore(df_cleaned[numeric_cols], nan_policy='omit')) < 3).all(axis=1)]
@@ -177,6 +190,15 @@ if uploaded_file is not None:
         # Save cleaned file
         cleaned_filename = f"cleaned_{uploaded_file.name.replace(' ', '_')}"
         df_cleaned.to_csv(cleaned_filename, index=False)
+
+        # Store in session history
+        with open(cleaned_filename, "rb") as f:
+            file_data = f.read()
+            st.session_state.file_history.append({
+                "name": cleaned_filename,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "data": file_data
+            })
 
         # Download button
         with open(cleaned_filename, "rb") as file:
