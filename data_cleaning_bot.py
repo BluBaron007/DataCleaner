@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import re
 import string
 from datetime import datetime
 from scipy import stats
@@ -90,7 +91,7 @@ if st.session_state.file_history:
                 key=f"history_{item['name']}"
             )
 else:
-    st.sidebar.info("No cleaned files this session.")
+    st.sidebar.info("Waiting for some files....)
 
 # ---- File Uploader ----
 uploaded_file = st.file_uploader("📂 Upload your file", type=["csv", "xlsx"])
@@ -154,11 +155,19 @@ if uploaded_file is not None:
         df_cleaned.columns = [col.strip().lower().replace(' ', '_') for col in df_cleaned.columns]
 
         # 4. Text normalization for object columns
-        text_norm = st.checkbox("🧹 Normalize text columns (lowercase, remove punctuation)", value=True)
+        text_norm = st.checkbox("🧹 Normalize text columns (lowercase, punctuation, spacing, capitalized)", value=True)
         if text_norm:
             for col in df_cleaned.select_dtypes(include=['object']).columns:
-                df_cleaned[col] = df_cleaned[col].astype(str).str.lower().str.translate(str.maketrans('', '', string.punctuation))
-            summary_log.append("✔ Text columns normalized (lowercase + punctuation removed).")
+                df_cleaned[col] = (
+                    df_cleaned[col]
+                    .astype(str)
+                    .str.lower()
+                    .str.translate(str.maketrans('', '', string.punctuation))
+                    .str.replace(r"\s+", " ", regex=True)
+                    .str.strip()
+                    .str.capitalize()
+                )
+            summary_log.append("✔ Text columns normalized (lowercase, punctuation removed, spaces cleaned, capitalized).")
 
         # 5. Enforce data types
         conversions = []
