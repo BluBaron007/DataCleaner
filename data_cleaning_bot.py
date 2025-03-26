@@ -39,7 +39,7 @@ Welcome to the **Data Cleaning Bot!**
 
 - Upload your CSV or Excel files 📄
 - Remove duplicates, fill missing values, fix data types
-- Remove numeric outliers 🚀
+- Remove numeric outliers 
 """)
 
 # ---- Sidebar Info ----
