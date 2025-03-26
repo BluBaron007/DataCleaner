@@ -6,16 +6,20 @@ from scipy.stats import norm
 import datetime
 
 # ---- Custom CSS Styling ----
-st.markdown("""
-<style>
-body {
-    background-color: #deb887;
-    color: #000000;
-    animation: fadeInBody 1s ease-in;
-}
-@keyframes fadeInBody {
-    from {opacity: 0;}
-    to {opacity: 1;}
+import streamlit as st
+
+# ---- Custom Background Color ----
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: #deb887;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 }
 /* Keep the rest of your styles unchanged */
 </style>
