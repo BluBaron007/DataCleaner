@@ -81,7 +81,7 @@ Welcome to the **Data Cleaning Bot!**
 # ---- Sidebar Info ----
 st.sidebar.header("About")
 st.sidebar.info("""
-This bot helps automate advanced data cleaning tasks using **Python & Streamlit**.
+This bot helps automate advanced data cleaning tasks using **Python**.
 
 Author: Jalen Claytor
 """)
