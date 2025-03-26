@@ -1,4 +1,4 @@
-import streamlit as st
+""import streamlit as st
 import pandas as pd
 import numpy as np
 import os
@@ -39,7 +39,7 @@ Welcome to the **Data Cleaning Bot!**
 
 - Upload your CSV or Excel files 📄
 - Remove duplicates, fill missing values, fix data types
-- Remove numeric outliers 
+- Remove numeric outliers and view a detailed cleaning summary 🚀
 """)
 
 # ---- Sidebar Info ----
@@ -67,35 +67,59 @@ if uploaded_file is not None:
         st.dataframe(df.head(), use_container_width=True)
 
         # ---- Cleaning Steps ----
+        summary_log = []
 
         # 1. Remove duplicates
+        dup_count = df.duplicated().sum()
         df_cleaned = df.drop_duplicates()
+        summary_log.append(f"✔ {dup_count} duplicate rows removed.")
 
         # 2. Fill missing values
+        missing_filled = {}
         for col in df_cleaned.columns:
-            if df_cleaned[col].dtype in [np.float64, np.int64]:
-                df_cleaned[col].fillna(df_cleaned[col].median(), inplace=True)
-            elif df_cleaned[col].dtype == object:
-                df_cleaned[col].fillna(df_cleaned[col].mode()[0] if not df_cleaned[col].mode().empty else "N/A", inplace=True)
-            else:
-                df_cleaned[col].fillna("N/A", inplace=True)
+            missing_before = df_cleaned[col].isna().sum()
+            if missing_before > 0:
+                if df_cleaned[col].dtype in [np.float64, np.int64]:
+                    df_cleaned[col].fillna(df_cleaned[col].median(), inplace=True)
+                    missing_filled[col] = f"filled {missing_before} NaNs with median ({df_cleaned[col].median()})"
+                elif df_cleaned[col].dtype == object:
+                    mode_val = df_cleaned[col].mode()[0] if not df_cleaned[col].mode().empty else "N/A"
+                    df_cleaned[col].fillna(mode_val, inplace=True)
+                    missing_filled[col] = f"filled {missing_before} NaNs with mode ('{mode_val}')"
+                else:
+                    df_cleaned[col].fillna("N/A", inplace=True)
+                    missing_filled[col] = f"filled {missing_before} NaNs with 'N/A'"
+        if missing_filled:
+            summary_log.append("✔ Missing values filled:")
+            for col, msg in missing_filled.items():
+                summary_log.append(f"    - '{col}': {msg}")
 
         # 3. Standardize column names
         df_cleaned.columns = [col.strip().lower().replace(' ', '_') for col in df_cleaned.columns]
 
         # 4. Enforce data types
+        conversions = []
         for col in df_cleaned.columns:
+            original_dtype = df_cleaned[col].dtype
             try:
                 df_cleaned[col] = pd.to_numeric(df_cleaned[col])
+                conversions.append(f"'{col}': converted to numeric")
             except:
                 try:
                     df_cleaned[col] = pd.to_datetime(df_cleaned[col])
+                    conversions.append(f"'{col}': converted to datetime")
                 except:
-                    pass
+                    conversions.append(f"'{col}': kept as {original_dtype}")
+        summary_log.append("✔ Data type conversions:")
+        summary_log.extend([f"    - {c}" for c in conversions])
 
         # 5. Remove numeric outliers (Z-score method)
         numeric_cols = df_cleaned.select_dtypes(include=[np.number]).columns
+        before_rows = df_cleaned.shape[0]
         df_cleaned = df_cleaned[(np.abs(stats.zscore(df_cleaned[numeric_cols], nan_policy='omit')) < 3).all(axis=1)]
+        after_rows = df_cleaned.shape[0]
+        outliers_removed = before_rows - after_rows
+        summary_log.append(f"✔ {outliers_removed} outlier rows removed from numeric columns.")
 
         st.subheader("✨ Cleaned Data Preview")
         st.dataframe(df_cleaned.head(), use_container_width=True)
@@ -109,6 +133,11 @@ if uploaded_file is not None:
             st.download_button(label="📥 Download Cleaned File", data=file, file_name=cleaned_filename, mime='text/csv')
 
         st.success("🎉 Cleaning complete! Download your file above.")
+
+        # Show summary
+        st.subheader("🧾 Cleaning Summary")
+        for line in summary_log:
+            st.write(line)
 
         # Cleanup temp file
         os.remove(cleaned_filename)
