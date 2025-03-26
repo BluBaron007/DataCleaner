@@ -91,7 +91,7 @@ if st.session_state.file_history:
                 key=f"history_{item['name']}"
             )
 else:
-    st.sidebar.info("Waiting for some files....)
+    st.sidebar.info("Waiting for some files....")
 
 # ---- File Uploader ----
 uploaded_file = st.file_uploader("📂 Upload your file", type=["csv", "xlsx"])
